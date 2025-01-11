@@ -1,172 +1,185 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { type square, rows } from '$lib/index';
+	import { type square, rows, draw, createPucks } from '$lib/index';
+	import { Puck } from '$lib/puck';
 
-	function isDisabled(square: square, squareIndex: number) {
+	function isSquareDisabled(square: square, squareIndex: number) {
+		if (drawing || shouldDraw()) {
+			return true;
+		}
 		if (square.isEmpty) {
 			return true;
 		}
 
-		// opponent is on rosette
-		// if (
-		// 	square.isRosette &&
-		// 	(square.id === player.player.activeId || square.id === player.opponent.activeId)
-		// ) {
-		// 	return true;
-		// }
+		if (activePuck === undefined) return true;
 
 		if (turn) {
 			if (squareIndex === 2) {
 				return true;
 			}
-			return square.id <= player.player.activeId || square.id > player.player.activeId + moves;
+			return !activePuck.canMove(moves, rows, opponentPucks, pucks, square);
 		} else {
 			if (squareIndex === 0) {
 				return true;
 			}
-			return (
-				(square.id <= player.opponent.activeId && square.id !== -1) ||
-				square.id > player.opponent.activeId + moves
-			);
-		}
-	}
-	function move(square: square, e: MouseEvent, squareIndex: number) {
-		const element = e.target as HTMLHtmlElement;
 
-		const puckTop = element.offsetTop + (element.offsetWidth - puckSize) / 2;
-		const puckLeft = element.offsetLeft + (element.offsetWidth - puckSize) / 2;
-
-		// Player 1 move
-		if (turn) {
-			player.player.activeId = square.id;
-			player.player.puckRef!.style.width = `${puckSize}px`;
-			player.player.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
-			if (square.id === player.opponent.activeId && squareIndex === 1) {
-				player.opponent.activeId = 0;
-				resetPuck(!turn);
-			}
-		} else {
-			player.opponent.activeId = square.id;
-			player.opponent.puckRef!.style.width = `${puckSize}px`;
-			player.opponent.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
-
-			if (square.id === player.player.activeId && squareIndex === 1) {
-				player.player.activeId = 0;
-				resetPuck(!turn);
-			}
-		}
-
-		if (square.isEnd) {
-			turn ? (player.player.activeId = 0) : (player.opponent.activeId = 0);
-			resetPuck(turn);
-		}
-
-		// if (
-
-		// ) {
-		// 	return true;
-		// }
-
-		if (!square.isRosette) {
-			turn = !turn;
+			return !activePuck.canMove(moves, rows, pucks, opponentPucks, square);
 		}
 	}
 
-	function resetPuck(turn?: boolean) {
-		let element = player.player.startRef!;
-		const puckSize = element.offsetWidth * 0.5;
-		let puckTop = element.offsetTop + (element.offsetWidth - puckSize) / 2;
-		let puckLeft = element.offsetLeft + (element.offsetWidth - puckSize) / 2;
+	function isPuckDisabled(puck: Puck) {
+		if ((turn && !puck.isPlayer) || (!turn && puck.isPlayer)) return true;
+		return drawing || shouldDraw() || puck.isScored;
+	}
 
-		if (turn === undefined) {
-			// Reset board.
-			// Place player puck
-			player.player.puckRef!.style.width = `${puckSize}px`;
-			player.player.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
+	function roll() {
+		drawing = true;
 
-			// Place opponent puck
-			element = player.opponent.startRef!;
-			puckTop = element.offsetTop + (element.offsetWidth - puckSize) / 2;
-			puckLeft = element.offsetLeft + (element.offsetWidth - puckSize) / 2;
-			player.opponent.puckRef!.style.width = `${puckSize}px`;
-			player.opponent.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
-		} else if (turn) {
-			// Reset for player 1
-			player.player.puckRef!.style.width = `${puckSize}px`;
-			player.player.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
-		} else {
-			// Reset for player 2
-			element = player.opponent.startRef!;
-			puckTop = element.offsetTop + (element.offsetWidth - puckSize) / 2;
-			puckLeft = element.offsetLeft + (element.offsetWidth - puckSize) / 2;
-			player.opponent.puckRef!.style.width = `${puckSize}px`;
-			player.opponent.puckRef!.style.transform = `translate(${puckLeft}px, ${puckTop}px)`;
+		setTimeout(() => {
+			dr();
+		}, 500);
+
+		function dr() {
+			moves = draw();
+			drawing = false;
+			if (moves === 0) {
+				turn = !turn;
+			}
 		}
 	}
 
 	let squareWidth = $state(0);
 	let puckSize = $derived(squareWidth * 0.5);
 
-	let player: {
-		player: { puckRef?: HTMLElement; startRef?: HTMLElement; activeId: number };
-		opponent: { puckRef?: HTMLElement; startRef?: HTMLElement; activeId: number };
-	} = $state({
-		player: { activeId: 0 },
-		opponent: { activeId: 0 }
-	});
-
 	let turn = $state(true);
 
-	let moves = 2;
+	let moves = $state(0);
 
-	onMount(resetPuck);
+	let drawing = $state(false);
+
+	let scores = $state({ player: 0, opponent: 0 });
+
+	let activePuck: Puck | undefined = $state();
+
+	const pucks: Puck[] = createPucks().pucks;
+	const opponentPucks: Puck[] = createPucks().opponentPucks;
+
+	function setActivePuck(puck: Puck) {
+		if ((turn && !puck.isPlayer) || (!turn && puck.isPlayer)) return;
+		activePuck = puck;
+	}
+	function resetActivePuck() {
+		activePuck = undefined;
+	}
+
+	function shouldDraw() {
+		return moves === 0;
+	}
 </script>
 
 <div class="flex h-full flex-col items-center justify-center gap-4">
-	<div
-		style="width: {squareWidth}px"
-		class="flex aspect-square items-center justify-center rounded-lg bg-white/20"
-	>
-		<span style="width: {puckSize}px" class="puck{turn ? '' : ' opponent'}"></span>
+	<div class="flex gap-4">
+		<div
+			style="width: {squareWidth}px"
+			class="flex aspect-square flex-col items-center justify-center gap-4 rounded-lg bg-white/20"
+		>
+			<button
+				aria-label="draw"
+				style="width: {puckSize}px"
+				disabled={!shouldDraw()}
+				class="puck {turn ? 'player' : 'opponent'} {drawing ? 'motion-preset-spin' : ''}"
+				onclick={() => roll()}
+			>
+			</button>
+			<span>Roll</span>
+		</div>
+		<div
+			style="width: {squareWidth}px"
+			class="flex aspect-square flex-col items-center justify-center gap-4 rounded-lg bg-white/20"
+		>
+			{moves} <span>Moves available</span>
+		</div>
 	</div>
 
-	<div class="board relative">
+	<div class="board relative" id="board">
 		{#each rows as row, rowIndex}
 			<div class="board-row">
 				{#each row.squares as square, squareIndex}
-					{#if square.isEmpty}
-						{#if squareIndex === 0}
-							<div bind:this={player.player.startRef} class="square empty"></div>
-						{:else}
-							<div bind:this={player.opponent.startRef} class="square empty"></div>
-						{/if}
-					{:else}
-						<button
-							aria-label="square"
-							bind:offsetWidth={squareWidth}
-							disabled={isDisabled(square, squareIndex)}
-							onclick={(e) => move(square, e, squareIndex)}
-							class="square{squareIndex === 0
-								? ' player'
-								: squareIndex === 2
-									? ' opponent'
-									: ''}{square.isRosette
+					<div
+						aria-label="square"
+						id={square.refId}
+						bind:offsetWidth={squareWidth}
+						class:disabled={isSquareDisabled(square, squareIndex)}
+						class="square{squareIndex === 1
+							? ' battle'
+							: square.isRosette
 								? ' rosette'
-								: square.isEmpty
+								: square.isEmpty || square.isEnd
 									? ' empty'
-									: square.isEnd
-										? ' end'
-										: ''}"
-						>
-						</button>
-					{/if}
+									: ''}"
+					></div>
 				{/each}
 			</div>
 		{/each}
-		<span bind:this={player.player.puckRef} class="puck absolute{turn ? '' : ' disabled'}"></span>
-		<span
-			bind:this={player.opponent.puckRef}
-			class="puck absolute opponent{turn ? ' disabled' : ''}"
-		></span>
+
+		<div class="absolute flex w-full justify-between">
+			<div
+				class="relative flex aspect-square flex-col gap-4"
+				style="height: {squareWidth}px; margin-left: -{squareWidth + 20}px"
+			>
+				<span>
+					Score {scores.player}
+				</span>
+
+				<div class="flex">
+					{#each pucks as puck}
+						<button
+							style="width: {squareWidth / 4}px"
+							id={puck.id}
+							aria-label={puck.id}
+							onmouseenter={() => setActivePuck(puck)}
+							onmouseleave={resetActivePuck}
+							disabled={isPuckDisabled(puck)}
+							class="puck offset"
+							onclick={() => {
+								resetActivePuck();
+								let result = puck.moveBy(moves, rows, opponentPucks, pucks);
+								turn = !result[1];
+								if (result[0]) moves = 0;
+								if (result[2]) scores.player++;
+							}}
+						></button>
+					{/each}
+				</div>
+			</div>
+
+			<div
+				class="relative flex aspect-square flex-col flex-wrap items-end gap-4"
+				style="height: {squareWidth}px; margin-right: -{squareWidth + 20}px"
+			>
+				<span>
+					Score {scores.opponent}
+				</span>
+				<div class="flex flex-row-reverse">
+					{#each opponentPucks as puck}
+						<button
+							style="width: {squareWidth / 4}px"
+							id={puck.id}
+							aria-label={puck.id}
+							onmouseenter={() => setActivePuck(puck)}
+							onmouseleave={resetActivePuck}
+							disabled={isPuckDisabled(puck)}
+							class="opponent puck offset"
+							onclick={() => {
+								resetActivePuck();
+								let result = puck.moveBy(moves, rows, pucks, opponentPucks);
+								turn = result[1];
+								if (result[0]) moves = 0;
+								if (result[2]) scores.opponent++;
+							}}
+						></button>
+					{/each}
+				</div>
+			</div>
+		</div>
 	</div>
 </div>
