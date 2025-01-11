@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type square, rows, draw, createPucks } from '$lib/index';
+	import { type square, createPucks, draw, rows } from '$lib/index';
 	import { Puck } from '$lib/puck';
 
 	function isSquareDisabled(square: square, squareIndex: number) {
@@ -101,7 +101,7 @@
 	</div>
 
 	<div class="board relative" id="board">
-		{#each rows as row, rowIndex}
+		{#each rows as row}
 			<div class="board-row">
 				{#each row.squares as square, squareIndex}
 					<div
@@ -109,10 +109,10 @@
 						id={square.refId}
 						bind:offsetWidth={squareWidth}
 						class:disabled={isSquareDisabled(square, squareIndex)}
-						class="square{squareIndex === 1
-							? ' battle'
-							: square.isRosette
-								? ' rosette'
+						class="square{square.isRosette
+							? ' rosette'
+							: squareIndex === 1
+								? ' battle'
 								: square.isEmpty || square.isEnd
 									? ' empty'
 									: ''}"
